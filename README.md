@@ -6,7 +6,7 @@ To access, a "cdn.gog-games.com" username/password is required.
 
 ## TL:DR I'm dumb
 1. Download the latest release (the .zip file found [here](https://github.com/GOG-Games-com/GG-Downloader-Windows/releases)) and extract
-2. Open Command Prompt or PowerShell terminal in the location `gg-downloader.exe`
+2. Open a Command Prompt or PowerShell terminal in the location of `gg-downloader.exe`
 3. Authenticate: `./gg-downloader.exe auth`
 3. Download: `./gg-downloader.exe download https://gog-games.com/game/arcade_paradise` (replace url for another game) or `gg-downloader download arcade_paradise` (replace slug for another game)
 4. Entered wrong creds for auth? `./gg-downloader.exe reset`
