@@ -14,7 +14,7 @@ To access, a "cdn.gog-games.com" username/password is required.
 2. You can either execute `gg-downloader` directly from the release or build path, or copy the executable (and its support files) to a folder in the executable search path somewhere. Ensure that the executing user has write permissions to folder the executable resides in, as a configuration file will be generated there.
 3. Authenticate: `gg-downloader auth`
 3. Download: `gg-downloader download https://gog-games.com/game/arcade_paradise` (replace url for another game) or `gg-downloader download arcade_paradise` (replace slug for another game)
-4. Entered wrong creds for auth? `./gg-downloader reset`
+4. Entered wrong creds for auth? `gg-downloader reset`
 
 ## Usage
 `./gg-downloader [command] [options]`
