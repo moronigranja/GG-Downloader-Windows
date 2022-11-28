@@ -5,16 +5,11 @@ Download files from GOG Games CDN.
 To access, a "cdn.gog-games.com" username/password is required.
 
 ## TL:DR I'm dumb
-1. Download the latest binary release (easiest), or download the source and compile (harder) with a .NET SDK (supports .NET Framework 4.8 or .NET 7.0).
-    1. To compile with the .NET Framework 4.8, from the root source folder, execute:
-    `dotnet build -f:net48 -c:Release`
-    2. To compile with the .NET 7.0 SDK, from the root source folder, execute 
-    `dotnet build -f:net7.0-windows -c:Release`
-    3. Will also compile for .NET 6.0 via adding the `net6.0` moniker to the `<TargetFrameworks>` property in `gg-downloader.csproj`. No other changes should be necessary.
-2. You can either execute `gg-downloader` directly from the release or build path, or copy the executable (and its support files) to a folder in the executable search path somewhere. Ensure that the executing user has write permissions to folder the executable resides in, as a configuration file will be generated there.
-3. Authenticate: `gg-downloader auth`
-3. Download: `gg-downloader download https://gog-games.com/game/arcade_paradise` (replace url for another game) or `gg-downloader download arcade_paradise` (replace slug for another game)
-4. Entered wrong creds for auth? `gg-downloader reset`
+1. Download the latest release (the .zip file found [here](https://github.com/GOG-Games-com/GG-Downloader-Windows/releases)) and extract
+2. Open Command Prompt or PowerShell terminal in the location `gg-downloader.exe`
+3. Authenticate: `./gg-downloader.exe auth`
+3. Download: `./gg-downloader.exe download https://gog-games.com/game/arcade_paradise` (replace url for another game) or `gg-downloader download arcade_paradise` (replace slug for another game)
+4. Entered wrong creds for auth? `./gg-downloader.exe reset`
 
 ## Usage
 `./gg-downloader [command] [options]`
@@ -89,3 +84,11 @@ When you fuck up and break your authentication or root CDN because you couldn't 
 OR
 
 * .NET 7.0 SDK. You [can grab it from here](https://dotnet.microsoft.com/en-us/download/dotnet/7.0) if you don't have it. Build with `dotnet build -f:net7.0 -c:Release`
+
+# How to build
+Compile with a .NET SDK (supports .NET Framework 4.8 or .NET 7.0).
+ 1. To compile with the .NET Framework 4.8, from the root source folder, execute:
+ `dotnet build -f:net48 -c:Release`
+ 2. To compile with the .NET 7.0 SDK, from the root source folder, execute 
+ `dotnet build -f:net7.0-windows -c:Release`
+ 3. Will also compile for .NET 6.0 via adding the `net6.0` moniker to the `<TargetFrameworks>` property in `gg-downloader.csproj`. No other changes should 
