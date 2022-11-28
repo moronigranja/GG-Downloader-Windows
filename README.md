@@ -12,7 +12,7 @@ To access, a "cdn.gog-games.com" username/password is required.
 4. Entered wrong creds for auth? `./gg-downloader.exe reset`
 
 ## Usage
-`./gg-downloader [command] [options]`
+`./gg-downloader.exe [command] [options]`
 
 **Options**
 
