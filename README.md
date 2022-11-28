@@ -62,15 +62,15 @@ In addition to the options above, the download command has several additional op
 
 **Examples**
 
-Authenticate against the CDN and set the username and password for the first time: `gg-downloader auth`
+Authenticate against the CDN and set the username and password for the first time: `./gg-downloader.exe auth`
 
-Download _Cyberpunk 2077_ with patches, but without goodies: `gg-downloader download cyberpunk_2077_game --patches:true --goodies:false`
+Download _Cyberpunk 2077_ with patches, but without goodies: `./gg-downloader.exe download cyberpunk_2077_game --patches:true --goodies:false`
 
-Download _The Ultimate Doom_ into the current working directory without validating the files: `gg-downloader download the_ultimate_doom_game --no-dir --unsafe`
+Download _The Ultimate Doom_ into the current working directory without validating the files: `./gg-downloader.exe download the_ultimate_doom_game --no-dir --unsafe`
 
-Get the latest releases from the GOG-Games feed: `gg-downloader latest` or `./gg-downloader Latest`
+Get the latest releases from the GOG-Games feed: `./gg-downloader.exe latest` or `./gg-downloader.exe Latest`
 
-When you fuck up and break your authentication or root CDN because you couldn't stop fiddling with things and just want to start over: `gg-downloader reset`
+When you fuck up and break your authentication or root CDN because you couldn't stop fiddling with things and just want to start over: `./gg-downloader.exe reset`
 
 # Requirements for binary release
 
