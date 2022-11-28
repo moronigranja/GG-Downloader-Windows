@@ -4,6 +4,9 @@ Download files from GOG Games CDN.
 
 To access, a "cdn.gog-games.com" username/password is required.
 
+## Why no GUI?
+That is coming next. Be patient. :)
+
 ## TL:DR I'm dumb
 1. Download the latest release (the .zip file found [here](https://github.com/GOG-Games-com/GG-Downloader-Windows/releases)) and extract
 2. Open a Command Prompt or PowerShell terminal in the location of `gg-downloader.exe`
