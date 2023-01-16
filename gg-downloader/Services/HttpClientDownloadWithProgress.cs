@@ -3,8 +3,11 @@ using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Force.Crc32;
+using Polly;
+using Polly.Retry;
 
 namespace gg_downloader.Services
 {
@@ -14,6 +17,7 @@ namespace gg_downloader.Services
         private readonly string _destinationFilePath;
         private readonly string _username;
         private readonly string _password;
+        private readonly AsyncRetryPolicy<uint> _retryPolicy;
 
         private HttpClient _httpClient;
 
@@ -27,6 +31,14 @@ namespace gg_downloader.Services
             _destinationFilePath = destinationFilePath;
             _username = username;
             _password = password;
+            _retryPolicy = Policy.HandleResult<uint>(res => res < 0)
+                                 .Or<Exception>()
+                                 .RetryAsync(10, onRetry: (delegateResult, retryCount) =>
+                                 {
+                                     Console.Out.WriteLine($"Error: {delegateResult?.Exception?.Message ?? "No exception"}");
+                                     Console.Out.WriteLine($"Retrying: {retryCount}");
+                                     Thread.Sleep(500);
+                                 });
         }
 
         public async Task<uint> StartDownload()
@@ -37,8 +49,14 @@ namespace gg_downloader.Services
             _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("GOG-Downloader-Win/1.0");
 
 
-            using (var response = await _httpClient.GetAsync(_downloadUrl, HttpCompletionOption.ResponseHeadersRead))
-                return await DownloadFileFromHttpResponseMessageWithCrc32(response);
+            var checksum = await _retryPolicy.ExecuteAsync(async () =>
+            {
+                using (var response = await _httpClient.GetAsync(_downloadUrl, HttpCompletionOption.ResponseHeadersRead))
+                    return await DownloadFileFromHttpResponseMessageWithCrc32(response);
+            });
+
+            return checksum;
+
         }
 
         private async Task<uint> DownloadFileFromHttpResponseMessageWithCrc32(HttpResponseMessage response)
@@ -66,8 +84,8 @@ namespace gg_downloader.Services
                     var bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length);
 
                     // calculate the CRC32 on what we downloaded.
-                    checksum = !checksum.HasValue 
-                        ? Crc32Algorithm.Compute(buffer, 0, bytesRead) 
+                    checksum = !checksum.HasValue
+                        ? Crc32Algorithm.Compute(buffer, 0, bytesRead)
                         : Crc32Algorithm.Append(checksum.Value, buffer, 0, bytesRead);
 
                     if (bytesRead == 0)
