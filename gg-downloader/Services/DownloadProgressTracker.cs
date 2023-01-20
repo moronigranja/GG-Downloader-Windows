@@ -5,23 +5,22 @@ using System.Collections.Generic;
 
 namespace gg_downloader.Services
 {
-    internal class DownloadProgressManager : IDisposable
+    internal class DownloadProgressTracker : IDisposable
     {
         // Private properties & class variables
         private readonly Timer _downloadTimer;
         private List<long> _totalBytesRead;
         private int _maxDataPoints;
         private const double _timerInterval = 200;
-        private const int _speedMeasurementInterval = 3000; //3 seconds
+        private const int _speedMeasurementInterval = 10000; //10 seconds
 
         //public properties and delegates
         public long? TotalDownloadSize { get; set; }
         public long CurrentBytesRead { get; set; }
-        public delegate void ProgressChangedHandler(double? totalFileSize, double totalBytesDownloaded, double? progressPercentage, string unit, string Speed);
+        public delegate void ProgressChangedHandler(double? totalFileSize, double totalBytesDownloaded, double? progressPercentage, string unit, string speed);
 
         public event ProgressChangedHandler ProgressChanged;
-
-        public DownloadProgressManager()
+        public DownloadProgressTracker()
         {
             _downloadTimer = new Timer(_timerInterval);
             _downloadTimer.Elapsed += updateDownloadStatus;
@@ -69,6 +68,10 @@ namespace gg_downloader.Services
 
         private void TriggerProgressChanged()
         {
+            //Fix to avoid negative download speeds
+            if (_totalBytesRead.Count > 0 && CurrentBytesRead < _totalBytesRead[_totalBytesRead.Count - 1])
+                _totalBytesRead.Clear();
+
             _totalBytesRead.Add(CurrentBytesRead);
             if (_totalBytesRead.Count > _maxDataPoints) _totalBytesRead.RemoveAt(0);
 
@@ -112,13 +115,12 @@ namespace gg_downloader.Services
                 unit = "Kib";
             }
 
-            if (currentSpeed > gb) speed = $"{Math.Round(currentSpeed / gb,2)} Gbps";
-            else if (currentSpeed > mb) speed = $"{Math.Round(currentSpeed / mb,2)} Mbps";
-            else if (currentSpeed > kb) speed = $"{Math.Round(currentSpeed / kb,2)} Kbps";
+            if (currentSpeed > gb) speed = $"{Math.Round(currentSpeed / gb, 2)} Gbps";
+            else if (currentSpeed > mb) speed = $"{Math.Round(currentSpeed / mb, 2)} Mbps";
+            else if (currentSpeed > kb) speed = $"{Math.Round(currentSpeed / kb, 2)} Kbps";
             else speed = $"{currentSpeed} bps";
 
             ProgressChanged(Math.Round(dblDownloadSize.Value, 2), Math.Round(dblBytesRead, 2), progressPercentage, unit, speed);
-            Thread.Sleep(50);
         }
 
         public void Dispose()
