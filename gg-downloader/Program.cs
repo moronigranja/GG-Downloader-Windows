@@ -43,6 +43,7 @@ namespace gg_downloader
                 ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             }
 #endif
+            ServicePointManager.DefaultConnectionLimit = 6;
 
             RootCommand rootCommand = new RootCommand("Download files from GOG Games CDN.");
 
@@ -213,8 +214,8 @@ namespace gg_downloader
 
                 using (var client = new HttpClientDownloadWithProgress(url, filename, username, password))
                 {
-                    client.ProgressChanged += (totalFileSize, totalBytesDownloaded, progressPercentage) => {
-                        Console.Write($"\r{progressPercentage}% ({totalBytesDownloaded}/{totalFileSize})");
+                    client.ProgressChanged += (totalFileSize, totalBytesDownloaded, progressPercentage, unit) => {
+                        Console.Write($"\r{progressPercentage}% ({totalBytesDownloaded} {unit}/{totalFileSize} {unit})                ");
                     };
 
                     crc32CheckSum = await client.StartDownload();
