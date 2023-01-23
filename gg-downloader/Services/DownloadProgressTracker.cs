@@ -1,10 +1,9 @@
 ﻿using System;
-using System.Threading;
 using Timer = System.Timers.Timer;
 using System.Collections.Generic;
 using System.Text;
 
-//Method updateText used with permission from https://gist.github.com/DanielSWolf/0ab6a96899cc5377bf54
+//Method updateText used under MIT license from https://gist.github.com/DanielSWolf/0ab6a96899cc5377bf54
 
 namespace gg_downloader.Services
 {
@@ -21,15 +20,13 @@ namespace gg_downloader.Services
         //public properties and delegates
         public long? TotalDownloadSize { get; set; }
         public long CurrentBytesRead { get; set; }
-        //public delegate void ProgressChangedHandler(double? totalFileSize, double totalBytesDownloaded, double? progressPercentage, string unit, string speed);
 
-        //public event ProgressChangedHandler ProgressChanged;
         public DownloadProgressTracker()
         {
             _downloadTimer = new Timer(_timerInterval);
             _downloadTimer.Elapsed += updateDownloadStatus;
-            _totalBytesRead = new List<long>();
             _maxDataPoints = _speedMeasurementInterval / Convert.ToInt32(_timerInterval);
+            _totalBytesRead = new List<long>();
         }
 
         public void Start()
@@ -72,9 +69,9 @@ namespace gg_downloader.Services
 
         private void TriggerProgressChanged()
         {
-            //Fix to avoid negative download speeds
-            if (_totalBytesRead.Count > 0 && CurrentBytesRead < _totalBytesRead[_totalBytesRead.Count - 1])
-                _totalBytesRead.Clear();
+            // //Fix to avoid negative download speeds
+            // if (_totalBytesRead.Count > 0 && CurrentBytesRead < _totalBytesRead[_totalBytesRead.Count - 1])
+            //     _totalBytesRead.Clear();
 
             _totalBytesRead.Add(CurrentBytesRead);
             if (_totalBytesRead.Count > _maxDataPoints) _totalBytesRead.RemoveAt(0);

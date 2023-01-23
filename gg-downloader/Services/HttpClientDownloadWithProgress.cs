@@ -51,10 +51,6 @@ namespace gg_downloader.Services
                                      if (delegateResult.Exception.GetType() != typeof(TimeoutRejectedException))
                                      {
                                          Console.Out.WriteLine($" - Error: {delegateResult?.Exception?.Message ?? "No exception"}, retrying: {retryCount}/10");
-                                         //  if (delegateResult?.Exception != null)
-                                         //  {
-                                         //      Console.WriteLine(delegateResult?.Exception?.StackTrace);
-                                         //  }
                                      }
                                      else
                                      {
@@ -102,7 +98,7 @@ namespace gg_downloader.Services
 
         private async Task<uint> ProcessContentStream(string filePath, Stream contentStream, ContentRangeHeaderValue rangeHeaderValue, CancellationToken cts)
         {
-            int bufferSize = 65536;
+            int bufferSize = 16384;
             var fileWritePosition = rangeHeaderValue?.From ?? 0;
             var buffer = new byte[bufferSize];
             var isMoreToRead = true;

@@ -11,12 +11,6 @@ using System.Linq;
 
 namespace gg_downloader.Services
 {
-    public class DownloadResult
-    {
-        public long startByte { get; set; }
-        public long endByte { get; set; }
-        public uint CheckSum { get; set; }
-    }
 
     public class DownloadManager : IDisposable
     {
@@ -46,15 +40,9 @@ namespace gg_downloader.Services
             _threads = threads > _maxThreads ? _maxThreads : threads;
 
             _progressManager = new DownloadProgressTracker();
-            //_progressManager.ProgressChanged += UpdateDownloadProgress;
 
             _httpClient = new HttpClient();
             _httpClient.Timeout = TimeSpan.FromSeconds(10);
-        }
-
-        private void UpdateDownloadProgress(double? totalFileSize, double totalBytesDownloaded, double? progressPercentage, string unit, string speed)
-        {
-            Console.Write($"\r{progressPercentage}% ({totalBytesDownloaded} {unit}/{totalFileSize} {unit}) {speed}       ");
         }
 
         private HttpClient CleanHttpClient
@@ -125,9 +113,11 @@ namespace gg_downloader.Services
 
             var downloadTask = new HttpClientDownloadWithProgress(_downloadUrl, _destinationFilePath, CleanHttpClient, 0, contentLength, contentLength, 0);
             downloadTask.DownloadedBytesChanged += UpdateDownloadedBytes;
+
             _startTime = DateTime.Now;
             var checkSum = await downloadTask.ThreadedDownload();
             _endTime = DateTime.Now;
+
             return checkSum;
         }
 
@@ -145,9 +135,8 @@ namespace gg_downloader.Services
             {
                 var startByte = chunkSize * i;
                 var endByte = (chunkSize * (i + 1)) - 1;
-                if (i == chunks - 1) endByte = contentLength;
-
-                //var task = new HttpClientDownloadWithProgress(_downloadUrl, $"{_destinationFilePath}.{i}", _httpClient, startByte, endByte, contentLength, i);
+                if (i == chunks - 1) endByte = contentLength; //Sets the last byte of last chunk
+                
                 var task = new HttpClientDownloadWithProgress(_downloadUrl, _destinationFilePath, CleanHttpClient, startByte, endByte, contentLength, i);
                 task.DownloadedBytesChanged += UpdateDownloadedBytes;
 
@@ -162,56 +151,10 @@ namespace gg_downloader.Services
             _endTime = DateTime.Now;
             _progressManager.Stop();
 
-            //Merge files
-            //await mergeFiles(downloadTasks.Select(x => x.FilePath).ToArray());
-
-            //Merge CRCs
-            uint compositeCheckSum = mergeCRCs(downloadTasks);
-
             //return complete checksum for all parts 
             var checkSumFromFile = await Crc32FromFile();
 
             return checkSumFromFile;
-        }
-
-        private uint mergeCRCs(List<HttpClientDownloadWithProgress> results)
-        {
-            var resultsArray = results.ToArray();
-            long contentLength = resultsArray[resultsArray.Length - 1].EndByte.Value;
-
-            uint compositeCheckSum = 0;
-
-            for (int i = 0; i < resultsArray.Length; i++)
-            {
-                var paddedChecksum = resultsArray[i].Checksum;
-                long bytesToAdd = contentLength - (resultsArray[i].EndByte.Value - 7); //+1
-
-                while (bytesToAdd > 0)
-                {
-                    long addNow = bytesToAdd > 65536 ? 65536 : bytesToAdd;
-                    bytesToAdd = bytesToAdd - addNow;
-
-                    byte[] endPadding = new byte[addNow];
-                    Console.WriteLine($"Before appending {addNow} bytes:: {paddedChecksum.ToString("X8")}");
-                    paddedChecksum = Crc32Algorithm.Append(paddedChecksum, endPadding, 0, endPadding.Length);
-                    Console.WriteLine($"After appending  {addNow} bytes:: {paddedChecksum.ToString("X8")}");
-                }
-                Console.WriteLine($"Singles:");
-                for (int j = 0; j < 16; j++)
-                {
-                    byte[] endPadding = new byte[1];
-                    Console.WriteLine($"Before appending 1 bytes:: {paddedChecksum.ToString("X8")}");
-                    paddedChecksum = Crc32Algorithm.Append(paddedChecksum, endPadding, 0, 1);
-                    Console.WriteLine($"After appending  1 bytes:: {paddedChecksum.ToString("X8")}");
-                }
-                Console.WriteLine($"{i}");
-                Console.WriteLine($"compositeCheckSum before: {compositeCheckSum.ToString("X8")}");
-                Console.WriteLine($"paddedChecksum before   : {paddedChecksum.ToString("X8")}");
-                compositeCheckSum = compositeCheckSum ^ paddedChecksum;
-                Console.WriteLine($"compositeCheckSum after : {compositeCheckSum.ToString("X8")}");
-            }
-
-            return compositeCheckSum;
         }
 
         private void UpdateDownloadedBytes(int chunkNumber, long totalBytesRead)
@@ -236,30 +179,6 @@ namespace gg_downloader.Services
             _progressManager.CurrentBytesRead = totalBytes;
         }
 
-        private async Task mergeFiles(string[] inputFilePaths)
-        {
-
-            //var inputFilePaths = ranges.Select(x => x.destinationFilePath).ToArray();
-            Console.WriteLine("Number of files: {0}.", inputFilePaths.Length);
-
-            using (var outputStream = new FileStream(inputFilePaths[0], FileMode.Append, FileAccess.Write, FileShare.None, 8192, true))
-            {
-                for (int i = 1; i < inputFilePaths.Length; i++)
-                {
-                    using (var inputStream = File.OpenRead(inputFilePaths[i]))
-                    {
-                        // Buffer size can be passed as the second argument.
-                        await inputStream.CopyToAsync(outputStream, 8192);
-                    }
-                    System.IO.File.Delete(inputFilePaths[i]);
-                    Console.WriteLine("The file {0} has been processed.", inputFilePaths[i]);
-                }
-            }
-
-            System.IO.File.Delete(_destinationFilePath);
-            System.IO.File.Move(inputFilePaths[0], _destinationFilePath);
-        }
-
         private async Task<RangeHeaders> getFileSize()
         {
             var client = CleanHttpClient;
@@ -280,7 +199,6 @@ namespace gg_downloader.Services
         private async Task<uint> Crc32FromFile(bool reportSpeed = true)
         {
             int bufferSize = 65536;
-            DateTime start = DateTime.Now;
             var totalBytesRead = 0L;
             var buffer = new byte[bufferSize];
             var isMoreToRead = true;
@@ -322,8 +240,6 @@ namespace gg_downloader.Services
             }
 
             Console.WriteLine("complete.");
-            DateTime end = DateTime.Now;
-            Console.WriteLine($"Checked in {(end - start).TotalSeconds} seconds {checksum.ToString("X8")}");
 
             return checksum;
         }
