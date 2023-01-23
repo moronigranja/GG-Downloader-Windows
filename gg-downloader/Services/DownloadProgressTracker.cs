@@ -2,6 +2,9 @@
 using System.Threading;
 using Timer = System.Timers.Timer;
 using System.Collections.Generic;
+using System.Text;
+
+//Method updateText used with permission from https://gist.github.com/DanielSWolf/0ab6a96899cc5377bf54
 
 namespace gg_downloader.Services
 {
@@ -13,13 +16,14 @@ namespace gg_downloader.Services
         private int _maxDataPoints;
         private const double _timerInterval = 200;
         private const int _speedMeasurementInterval = 10000; //10 seconds
+        private string currentText = string.Empty;
 
         //public properties and delegates
         public long? TotalDownloadSize { get; set; }
         public long CurrentBytesRead { get; set; }
-        public delegate void ProgressChangedHandler(double? totalFileSize, double totalBytesDownloaded, double? progressPercentage, string unit, string speed);
+        //public delegate void ProgressChangedHandler(double? totalFileSize, double totalBytesDownloaded, double? progressPercentage, string unit, string speed);
 
-        public event ProgressChangedHandler ProgressChanged;
+        //public event ProgressChangedHandler ProgressChanged;
         public DownloadProgressTracker()
         {
             _downloadTimer = new Timer(_timerInterval);
@@ -75,8 +79,8 @@ namespace gg_downloader.Services
             _totalBytesRead.Add(CurrentBytesRead);
             if (_totalBytesRead.Count > _maxDataPoints) _totalBytesRead.RemoveAt(0);
 
-            if (ProgressChanged == null)
-                return;
+            // if (ProgressChanged == null)
+            //     return;
 
             double? dblDownloadSize = TotalDownloadSize;
             double dblBytesRead = CurrentBytesRead;
@@ -121,6 +125,41 @@ namespace gg_downloader.Services
             else speed = $"{currentSpeed} bps";
 
             ProgressChanged(Math.Round(dblDownloadSize.Value, 2), Math.Round(dblBytesRead, 2), progressPercentage, unit, speed);
+        }
+
+        private void ProgressChanged(double? totalFileSize, double totalBytesDownloaded, double? progressPercentage, string unit, string speed)
+        {
+            var text = $"\r{progressPercentage}% ({totalBytesDownloaded}/{totalFileSize} {unit}) {speed}";
+            UpdateText(text);
+        }
+
+        private void UpdateText(string text)
+        {
+            // Get length of common portion
+            int commonPrefixLength = 0;
+            int commonLength = Math.Min(currentText.Length, text.Length);
+            while (commonPrefixLength < commonLength && text[commonPrefixLength] == currentText[commonPrefixLength])
+            {
+                commonPrefixLength++;
+            }
+
+            // Backtrack to the first differing character
+            StringBuilder outputBuilder = new StringBuilder();
+            outputBuilder.Append('\b', currentText.Length - commonPrefixLength);
+
+            // Output new suffix
+            outputBuilder.Append(text.Substring(commonPrefixLength));
+
+            // If the new text is shorter than the old one: delete overlapping characters
+            int overlapCount = currentText.Length - text.Length;
+            if (overlapCount > 0)
+            {
+                outputBuilder.Append(' ', overlapCount);
+                outputBuilder.Append('\b', overlapCount);
+            }
+
+            Console.Write(outputBuilder);
+            currentText = text;
         }
 
         public void Dispose()

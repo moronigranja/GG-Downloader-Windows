@@ -22,14 +22,14 @@ namespace gg_downloader.Services
         private readonly long _startByte;
         private readonly long? _endByte;
         private long _totalBytesRead;
-        private uint? _checksum;
+        private uint _checksum;
 
 
         public readonly int ChunkNumber;
         public string FilePath { get { return _destinationFilePath; } }
         public long StartByte { get { return _startByte; } }
         public long? EndByte { get { return _endByte; } }
-        public uint Checksum { get { return _checksum ?? 0; } }
+        public uint Checksum { get { return _checksum; } }
 
         public delegate void DownloadedBytesChangedHandler(int chunkNumber, long totalBytesDownloaded);
         public event DownloadedBytesChangedHandler DownloadedBytesChanged;
@@ -50,16 +50,15 @@ namespace gg_downloader.Services
                                  {
                                      if (delegateResult.Exception.GetType() != typeof(TimeoutRejectedException))
                                      {
-                                         Console.Out.WriteLine($"Error: {delegateResult?.Exception?.Message ?? "No exception"}");
-                                         if (delegateResult?.Exception != null)
-                                         {
-                                             Console.WriteLine(delegateResult?.Exception?.StackTrace);
-                                         }
-                                         Console.Out.WriteLine($"Retrying: {retryCount}");
+                                         Console.Out.WriteLine($" - Error: {delegateResult?.Exception?.Message ?? "No exception"}, retrying: {retryCount}/10");
+                                         //  if (delegateResult?.Exception != null)
+                                         //  {
+                                         //      Console.WriteLine(delegateResult?.Exception?.StackTrace);
+                                         //  }
                                      }
                                      else
                                      {
-                                         Console.Out.WriteLine($"Download thread {ChunkNumber} stalled, retrying: {retryCount}");
+                                         Console.Out.WriteLine($" - Download thread {ChunkNumber} stalled, retrying: {retryCount}/10");
                                      }
 
                                      Thread.Sleep(500);
@@ -70,7 +69,7 @@ namespace gg_downloader.Services
         public async Task<uint> ThreadedDownload()
         {
             _totalBytesRead = 0;
-            _checksum = null;
+            _checksum = 0;
 
             var checksum = await _retryPolicy.ExecuteAsync(async () =>
             {
@@ -103,11 +102,12 @@ namespace gg_downloader.Services
 
         private async Task<uint> ProcessContentStream(string filePath, Stream contentStream, ContentRangeHeaderValue rangeHeaderValue, CancellationToken cts)
         {
+            int bufferSize = 65536;
             var fileWritePosition = rangeHeaderValue?.From ?? 0;
-            var buffer = new byte[8192];
+            var buffer = new byte[bufferSize];
             var isMoreToRead = true;
 
-            using (var fileStream = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite, 8192, true))
+            using (var fileStream = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite, bufferSize, true))
             //using (var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
             {
                 fileStream.Seek(fileWritePosition, SeekOrigin.Begin);
@@ -120,10 +120,8 @@ namespace gg_downloader.Services
                         {
                             var bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, token);
 
-                            //calculate the CRC32 on what we downloaded.
-                            _checksum = !_checksum.HasValue
-                                ? Crc32Algorithm.Compute(buffer, 0, bytesRead)
-                                : Crc32Algorithm.Append(_checksum.Value, buffer, 0, bytesRead);
+                            //calculate the CRC32 on what we downloaded.s
+                            _checksum = Crc32Algorithm.Append(_checksum, buffer, 0, bytesRead);
 
                             if (bytesRead == 0)
                             {
@@ -141,7 +139,7 @@ namespace gg_downloader.Services
                 while (isMoreToRead);
             }
 
-            return _checksum ?? 0;
+            return _checksum;
         }
 
         private void TriggerProgressChanged(long totalBytesRead)

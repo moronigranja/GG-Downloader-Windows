@@ -4,13 +4,9 @@ using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using Force.Crc32;
 using gg_downloader.Models;
-using Polly;
-using Polly.Retry;
-using Polly.Timeout;
 using System.Linq;
 
 namespace gg_downloader.Services
@@ -50,7 +46,7 @@ namespace gg_downloader.Services
             _threads = threads > _maxThreads ? _maxThreads : threads;
 
             _progressManager = new DownloadProgressTracker();
-            _progressManager.ProgressChanged += UpdateDownloadProgress;
+            //_progressManager.ProgressChanged += UpdateDownloadProgress;
 
             _httpClient = new HttpClient();
             _httpClient.Timeout = TimeSpan.FromSeconds(10);
@@ -103,7 +99,9 @@ namespace gg_downloader.Services
             if (_sfvDictionary != null && !string.IsNullOrEmpty(filename) && File.Exists(_destinationFilePath) && _sfvDictionary.ContainsKey(filename))
             {
                 Console.WriteLine($"{filename} found in destination path.");
+
                 var crc32CheckSum = await Crc32FromFile();
+
                 if (crc32CheckSum.ToString("X8").ToLower() == _sfvDictionary[filename])
                 {
                     return crc32CheckSum;
@@ -120,6 +118,17 @@ namespace gg_downloader.Services
             var speed = (contentLength / downloadTime.TotalSeconds) / (1024 * 1024);
             var filesize = (double)contentLength / (1024 * 1024);
             Console.WriteLine($"\rDownloaded {filename}. {Math.Round(filesize, 2)} MiB in {downloadTime.TotalSeconds} seconds ({Math.Round(speed.Value, 2)} MB/s).");
+        }
+
+        private async Task<uint> SingleThreadDownload(long? contentLength)
+        {
+
+            var downloadTask = new HttpClientDownloadWithProgress(_downloadUrl, _destinationFilePath, CleanHttpClient, 0, contentLength, contentLength, 0);
+            downloadTask.DownloadedBytesChanged += UpdateDownloadedBytes;
+            _startTime = DateTime.Now;
+            var checkSum = await downloadTask.ThreadedDownload();
+            _endTime = DateTime.Now;
+            return checkSum;
         }
 
         private async Task<uint> MultiThreadDownload(long contentLength)
@@ -175,31 +184,34 @@ namespace gg_downloader.Services
             for (int i = 0; i < resultsArray.Length; i++)
             {
                 var paddedChecksum = resultsArray[i].Checksum;
-                long bytesToAdd = contentLength - resultsArray[i].EndByte.Value;
+                long bytesToAdd = contentLength - (resultsArray[i].EndByte.Value - 7); //+1
 
                 while (bytesToAdd > 0)
                 {
-                    long addNow = bytesToAdd > 8192 ? 8192 : bytesToAdd;
+                    long addNow = bytesToAdd > 65536 ? 65536 : bytesToAdd;
                     bytesToAdd = bytesToAdd - addNow;
 
-                    byte[] endPadding = new byte[bytesToAdd];
-                    paddedChecksum = Crc32Algorithm.Append(paddedChecksum, endPadding, 0, Convert.ToInt32(bytesToAdd));
+                    byte[] endPadding = new byte[addNow];
+                    Console.WriteLine($"Before appending {addNow} bytes:: {paddedChecksum.ToString("X8")}");
+                    paddedChecksum = Crc32Algorithm.Append(paddedChecksum, endPadding, 0, endPadding.Length);
+                    Console.WriteLine($"After appending  {addNow} bytes:: {paddedChecksum.ToString("X8")}");
                 }
+                Console.WriteLine($"Singles:");
+                for (int j = 0; j < 16; j++)
+                {
+                    byte[] endPadding = new byte[1];
+                    Console.WriteLine($"Before appending 1 bytes:: {paddedChecksum.ToString("X8")}");
+                    paddedChecksum = Crc32Algorithm.Append(paddedChecksum, endPadding, 0, 1);
+                    Console.WriteLine($"After appending  1 bytes:: {paddedChecksum.ToString("X8")}");
+                }
+                Console.WriteLine($"{i}");
+                Console.WriteLine($"compositeCheckSum before: {compositeCheckSum.ToString("X8")}");
+                Console.WriteLine($"paddedChecksum before   : {paddedChecksum.ToString("X8")}");
                 compositeCheckSum = compositeCheckSum ^ paddedChecksum;
+                Console.WriteLine($"compositeCheckSum after : {compositeCheckSum.ToString("X8")}");
             }
-            
+
             return compositeCheckSum;
-        }
-
-        private async Task<uint> SingleThreadDownload(long? contentLength)
-        {
-
-            var downloadTask = new HttpClientDownloadWithProgress(_downloadUrl, _destinationFilePath, CleanHttpClient, 0, contentLength, contentLength, 0);
-            downloadTask.DownloadedBytesChanged += UpdateDownloadedBytes;
-            _startTime = DateTime.Now;
-            var checkSum = await downloadTask.ThreadedDownload();
-            _endTime = DateTime.Now;
-            return checkSum;
         }
 
         private void UpdateDownloadedBytes(int chunkNumber, long totalBytesRead)
@@ -265,16 +277,19 @@ namespace gg_downloader.Services
             return headers;
         }
 
-        private async Task<uint> Crc32FromFile()
+        private async Task<uint> Crc32FromFile(bool reportSpeed = true)
         {
+            int bufferSize = 65536;
+            DateTime start = DateTime.Now;
             var totalBytesRead = 0L;
-            var buffer = new byte[8192];
+            var buffer = new byte[bufferSize];
             var isMoreToRead = true;
-            uint? checksum = null;
+            uint checksum = 0;
+            double lastPercent = -1;
 
             if (!File.Exists(_destinationFilePath)) return 0;
 
-            using (var fileStream = new FileStream(_destinationFilePath, FileMode.Open, FileAccess.Read, FileShare.None, 8192, true))
+            using (var fileStream = new FileStream(_destinationFilePath, FileMode.Open, FileAccess.Read, FileShare.None, bufferSize, true))
             {
                 Console.Write("\n");
                 do
@@ -282,9 +297,7 @@ namespace gg_downloader.Services
                     var bytesRead = await fileStream.ReadAsync(buffer, 0, buffer.Length);
 
                     // calculate the CRC32 on what we downloaded.
-                    checksum = !checksum.HasValue
-                        ? Crc32Algorithm.Compute(buffer, 0, bytesRead)
-                        : Crc32Algorithm.Append(checksum.Value, buffer, 0, bytesRead);
+                    checksum = Crc32Algorithm.Append(checksum, buffer, 0, bytesRead);
 
                     if (bytesRead == 0)
                     {
@@ -294,17 +307,27 @@ namespace gg_downloader.Services
 
                     totalBytesRead += bytesRead;
 
-                    var percent = Math.Round((double)totalBytesRead / fileStream.Length * 100, 0).ToString().PadLeft(3, ' ');
-
-                    Console.Write($"\rCalculating CRC32 {percent}% ...");
+                    if (reportSpeed)
+                    {
+                        var percent = Math.Round((double)totalBytesRead / fileStream.Length * 100, 0);
+                        if (percent != lastPercent)
+                        {
+                            lastPercent = percent;
+                            var percentString = percent.ToString().PadLeft(3, ' ');
+                            Console.Write($"\rCalculating CRC32 {percentString}% ...");
+                        }
+                    }
                 }
                 while (isMoreToRead);
             }
 
             Console.WriteLine("complete.");
+            DateTime end = DateTime.Now;
+            Console.WriteLine($"Checked in {(end - start).TotalSeconds} seconds {checksum.ToString("X8")}");
 
-            return checksum.Value;
+            return checksum;
         }
+
 
         public void Dispose()
         {
