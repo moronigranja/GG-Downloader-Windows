@@ -63,7 +63,7 @@ namespace gg_downloader.Services
 
             var meanSpeed = speedSums / _totalBytesRead.Count;
 
-            return meanSpeed * (1000 / _timerInterval) * 8;
+            return meanSpeed * (1000 / _timerInterval);
         }
 
         private void TriggerProgressChanged()
@@ -91,33 +91,33 @@ namespace gg_downloader.Services
             currentSpeed = calculateCurrentSpeed();
             string speed = "0 bps";
 
-            long gb = 1024 * 1024 * 870;
-            long mb = 1024 * 870;
-            long kb = 870;
+            long gb = 1024 * 1024 * 1024;
+            long mb = 1024 * 1024;
+            long kb = 1024;
             var unit = "bytes";
 
-            if (dblBytesRead > gb)
+            if (dblBytesRead > (gb * 0.85))
             {
                 dblBytesRead = dblBytesRead / gb;
                 dblDownloadSize = dblDownloadSize / gb;
                 unit = "GiB";
             }
-            else if (dblBytesRead > mb)
+            else if (dblBytesRead > (mb * 0.85))
             {
                 dblBytesRead = dblBytesRead / mb;
                 dblDownloadSize = dblDownloadSize / mb;
                 unit = "MiB";
             }
-            else if (dblBytesRead > kb)
+            else if (dblBytesRead > (kb * 0.85))
             {
                 dblBytesRead = dblBytesRead / kb;
                 dblDownloadSize = dblDownloadSize / kb;
                 unit = "Kib";
             }
 
-            if (currentSpeed > gb) speed = $"{Math.Round(currentSpeed / gb, 2)} Gbps";
-            else if (currentSpeed > mb) speed = $"{Math.Round(currentSpeed / mb, 2)} Mbps";
-            else if (currentSpeed > kb) speed = $"{Math.Round(currentSpeed / kb, 2)} Kbps";
+            if (currentSpeed > gb) speed = $"{Math.Round(currentSpeed / gb, 2)} GB/s";
+            else if (currentSpeed > mb) speed = $"{Math.Round(currentSpeed / mb, 2)} MB/s";
+            else if (currentSpeed > kb) speed = $"{Math.Round(currentSpeed / kb, 2)} KB/s";
             else speed = $"{currentSpeed} bps";
 
             ProgressChanged(Math.Round(dblDownloadSize.Value, 2), Math.Round(dblBytesRead, 2), progressPercentage, unit, speed);

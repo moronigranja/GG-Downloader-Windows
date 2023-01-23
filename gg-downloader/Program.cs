@@ -110,6 +110,8 @@ namespace gg_downloader
             Option<bool> goodiesOption = new Option<bool>("--goodies", () => true, "download the goodies");
             Option<bool> patchesOption = new Option<bool>("--patches", () => false, "download the patches");
             Option<bool> gameOption = new Option<bool>("--game", () => true, "download the game files");
+            Option<int> threadOption = new Option<int>("--threads", () => 4, "how many threads to use for downloading (max: 4)");
+            threadOption.AddAlias("-t");
             Command downloadCommand = new Command("download", "download a game from the GOG Games CDN");
             downloadCommand.AddOption(userOption);
             downloadCommand.AddAlias("d");
@@ -120,9 +122,10 @@ namespace gg_downloader
             downloadCommand.AddOption(goodiesOption);
             downloadCommand.AddOption(patchesOption);
             downloadCommand.AddOption(gameOption);
+            downloadCommand.AddOption(threadOption);
             Argument<string> urlOrSlug = new Argument<string>("slug-or-url", "slug or URL to download");
             downloadCommand.AddArgument(urlOrSlug);
-          
+
             downloadCommand.SetHandler(async (context) =>
             {
                 await DownloadGame(
@@ -134,7 +137,8 @@ namespace gg_downloader
                     context.ParseResult.GetValueForOption(unsafeOption),
                     context.ParseResult.GetValueForOption(goodiesOption),
                     context.ParseResult.GetValueForOption(patchesOption),
-                    context.ParseResult.GetValueForOption(gameOption)
+                    context.ParseResult.GetValueForOption(gameOption),
+                    context.ParseResult.GetValueForOption(threadOption)
                     );
             });
 
@@ -144,7 +148,7 @@ namespace gg_downloader
         }
 
         private static async Task DownloadGame(string slugOrUrl, string username, string password,
-            string downloadRoot, bool noDir, bool noVerify, bool goodies, bool patches, bool game)
+            string downloadRoot, bool noDir, bool noVerify, bool goodies, bool patches, bool game, int threads)
         {
 
             // okay, here we go. First thing we need to sort out is whether we were given a URL 
@@ -166,10 +170,16 @@ namespace gg_downloader
             Dictionary<string, string> sfvDictionary = new Dictionary<string, string>();
             if (!noVerify)
             {
-                string checkSums =
-                    await (await HttpRequest.Get(new Uri(downloadRoot + "/sfv/" + slug + ".sfv"), username, password))
-                        .Content.ReadAsStringAsync();
-                foreach (string line in checkSums.Split(new [] { "\r\n", "\r", "\n" }, StringSplitOptions.None))
+                var sfvResponse = await HttpRequest.Get(new Uri(downloadRoot + "/sfv/" + slug + ".sfv"), username, password);
+                if (!sfvResponse.IsSuccessStatusCode)
+                {
+                    var errorMessage = await sfvResponse.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Error executing request: {uri.AbsoluteUri}: {errorMessage} (HTTP {sfvResponse.StatusCode})");
+                    return;
+                }
+
+                string checkSums = await sfvResponse.Content.ReadAsStringAsync();
+                foreach (string line in checkSums.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None))
                 {
                     try
                     {
@@ -200,35 +210,35 @@ namespace gg_downloader
             if (!noDir)
             {
                 Directory.CreateDirectory(slug);
-            } 
+            }
 
             foreach (FileToDownloadInfo file in files)
             {
-                string url = downloadRoot + "/" + 
-                    (file.Type == FileToDownloadInfo.FileType.Patch ? "patches/" : "downloads/" + slug) + 
-                    "/"+ file.FileName;
+                string url = downloadRoot + "/" +
+                    (file.Type == FileToDownloadInfo.FileType.Patch ? "patches/" : "downloads/" + slug) +
+                    "/" + file.FileName;
                 string filename = (noDir ? "./" : slug + "/") + file.FileName;
-                
+
                 Console.WriteLine($"Downloading {url}");
                 uint crc32CheckSum;
 
-                using (var manager = new DownloadManager(url, filename, username, password, sfvDictionary))
+                using (var manager = new DownloadManager(url, filename, username, password, sfvDictionary, threads))
                 {
                     crc32CheckSum = await manager.StartDownload();
-                }                
+                }
 
                 if (noVerify) continue;
 
                 // check the file against the sfv dictionary.
                 if (crc32CheckSum.ToString("X8").ToLower() != sfvDictionary[file.FileName])
                 {
-                    Console.WriteLine($"\r{file.FileName} failed SFV validation.");
+                    Console.WriteLine($"{file.FileName} failed SFV validation after download.");
                     Console.WriteLine("Halting...");
                     return;
                 }
                 else
                 {
-                    Console.WriteLine($"\r{file.FileName} passed SFV validation.");
+                    Console.WriteLine($"{file.FileName} passed SFV validation.");
                 }
             }
 
@@ -236,7 +246,7 @@ namespace gg_downloader
 
         private static string ConvertUriToSlug(Uri uri)
         {
-            return uri.ToString().Substring(uri.ToString().LastIndexOf('/')+1);
+            return uri.ToString().Substring(uri.ToString().LastIndexOf('/') + 1);
         }
 
         private static List<string> ExtractFilesFromPage(Regex fileBlockRegex, string pageContent)
@@ -263,7 +273,7 @@ namespace gg_downloader
             List<FileToDownloadInfo> results = new List<FileToDownloadInfo>();
             foreach (string s in filesInBlock)
             {
-                results.Add(new FileToDownloadInfo {  FileName = s, Type = FileToDownloadInfo.FileType.Game });
+                results.Add(new FileToDownloadInfo { FileName = s, Type = FileToDownloadInfo.FileType.Game });
             }
             return results;
         }
@@ -400,8 +410,16 @@ namespace gg_downloader
                 Console.WriteLine("GG-Downloader-Win: auth: Incorrect username/password");
                 return;
             }
+            else if (result.IsSuccessStatusCode)
+            {
+                Console.WriteLine("GG-Downloader-Win: auth: Successful log-in");
+            }
+            else
+            {
+                Console.WriteLine($"Error {(int)result.StatusCode}: {result.ReasonPhrase}");
+            }
 
-            Console.WriteLine("GG-Downloader-Win: auth: Successful log-in");
+
         }
 
         private static void SetCDNRoot(string cdnRoot)

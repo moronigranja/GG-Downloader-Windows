@@ -22,9 +22,14 @@ namespace gg_downloader.Services
         private readonly long _startByte;
         private readonly long? _endByte;
         private long _totalBytesRead;
-        public readonly int ChunkNumber;
+        private uint? _checksum;
 
+
+        public readonly int ChunkNumber;
         public string FilePath { get { return _destinationFilePath; } }
+        public long StartByte { get { return _startByte; } }
+        public long? EndByte { get { return _endByte; } }
+        public uint Checksum { get { return _checksum ?? 0; } }
 
         public delegate void DownloadedBytesChangedHandler(int chunkNumber, long totalBytesDownloaded);
         public event DownloadedBytesChangedHandler DownloadedBytesChanged;
@@ -50,8 +55,13 @@ namespace gg_downloader.Services
                                          {
                                              Console.WriteLine(delegateResult?.Exception?.StackTrace);
                                          }
+                                         Console.Out.WriteLine($"Retrying: {retryCount}");
                                      }
-                                     Console.Out.WriteLine($"Retrying: {retryCount}");
+                                     else
+                                     {
+                                         Console.Out.WriteLine($"Download thread {ChunkNumber} stalled, retrying: {retryCount}");
+                                     }
+
                                      Thread.Sleep(500);
                                  });
             _timeoutPolicy = Policy.TimeoutAsync(10);
@@ -59,13 +69,13 @@ namespace gg_downloader.Services
 
         public async Task<uint> ThreadedDownload()
         {
-
             _totalBytesRead = 0;
+            _checksum = null;
 
             var checksum = await _retryPolicy.ExecuteAsync(async () =>
             {
                 if (_endByte.HasValue) _httpClient.DefaultRequestHeaders.Range = new RangeHeaderValue(_startByte + _totalBytesRead, _endByte);
-                Console.WriteLine($"startByte: {_startByte}, TotalBytesRead: {_totalBytesRead}, EndByte: {_endByte}");
+                //Console.WriteLine($"startByte: {_startByte}, TotalBytesRead: {_totalBytesRead}, EndByte: {_endByte}");
 
                 using (var cts = new CancellationTokenSource())
                 using (var response = await _httpClient.GetAsync(_downloadUrl, HttpCompletionOption.ResponseHeadersRead, cts.Token))
@@ -96,13 +106,6 @@ namespace gg_downloader.Services
             var fileWritePosition = rangeHeaderValue?.From ?? 0;
             var buffer = new byte[8192];
             var isMoreToRead = true;
-            uint? checksum = null;
-
-            // if (fileWritePosition != 0)
-            // {
-            //     byte[] startPadding = new byte[fileWritePosition];
-            //     checksum = Crc32Algorithm.Compute(startPadding, 0, Convert.ToInt32(fileWritePosition));
-            // }
 
             using (var fileStream = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite, 8192, true))
             //using (var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
@@ -118,9 +121,9 @@ namespace gg_downloader.Services
                             var bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, token);
 
                             //calculate the CRC32 on what we downloaded.
-                            checksum = !checksum.HasValue
+                            _checksum = !_checksum.HasValue
                                 ? Crc32Algorithm.Compute(buffer, 0, bytesRead)
-                                : Crc32Algorithm.Append(checksum.Value, buffer, 0, bytesRead);
+                                : Crc32Algorithm.Append(_checksum.Value, buffer, 0, bytesRead);
 
                             if (bytesRead == 0)
                             {
@@ -138,14 +141,7 @@ namespace gg_downloader.Services
                 while (isMoreToRead);
             }
 
-            // if (fileWritePosition + _totalBytesRead < _contentLength)
-            // {
-            //     long endPaddingLength = _contentLength.Value - (fileWritePosition + _totalBytesRead);
-            //     byte[] endPadding = new byte[endPaddingLength];
-            //     checksum = Crc32Algorithm.Append(checksum.Value, endPadding, 0, Convert.ToInt32(endPaddingLength));
-            // }
-
-            return checksum ?? 0;
+            return _checksum ?? 0;
         }
 
         private void TriggerProgressChanged(long totalBytesRead)

@@ -15,26 +15,31 @@ using System.Linq;
 
 namespace gg_downloader.Services
 {
+    public class DownloadResult
+    {
+        public long startByte { get; set; }
+        public long endByte { get; set; }
+        public uint CheckSum { get; set; }
+    }
+
     public class DownloadManager : IDisposable
     {
         private readonly string _downloadUrl;
         private readonly string _destinationFilePath;
         private readonly string _username;
         private readonly string _password;
-        private const long minChunkSize = 100 * 1024 * 1024;
+        private const long minChunkSize = 1 * 1024 * 1024;
         private const int _maxThreads = 4;
+        private readonly int _threads;
         private readonly DownloadProgressTracker _progressManager;
         private HttpClient _httpClient;
         private Dictionary<int, long> _downloadedBytes;
         private DateTime _startTime;
         private DateTime _endTime;
         private readonly Dictionary<string, string> _sfvDictionary;
+        private readonly object objectLock = new object();
 
-        public delegate void ProgressChangedHandler(double? totalFileSize, double totalBytesDownloaded, double? progressPercentage, string unit);
-
-        public event ProgressChangedHandler ProgressChanged;
-
-        public DownloadManager(string downloadUrl, string destinationFilePath, string username, string password, Dictionary<string, string> sfvDictionary)
+        public DownloadManager(string downloadUrl, string destinationFilePath, string username, string password, Dictionary<string, string> sfvDictionary, int threads)
         {
             _downloadUrl = downloadUrl;
             _destinationFilePath = destinationFilePath;
@@ -42,6 +47,7 @@ namespace gg_downloader.Services
             _password = password;
             _downloadedBytes = new Dictionary<int, long>();
             _sfvDictionary = sfvDictionary;
+            _threads = threads > _maxThreads ? _maxThreads : threads;
 
             _progressManager = new DownloadProgressTracker();
             _progressManager.ProgressChanged += UpdateDownloadProgress;
@@ -96,12 +102,13 @@ namespace gg_downloader.Services
 
             if (_sfvDictionary != null && !string.IsNullOrEmpty(filename) && File.Exists(_destinationFilePath) && _sfvDictionary.ContainsKey(filename))
             {
+                Console.WriteLine($"{filename} found in destination path.");
                 var crc32CheckSum = await Crc32FromFile();
                 if (crc32CheckSum.ToString("X8").ToLower() == _sfvDictionary[filename])
                 {
-                    Console.WriteLine($"{filename} found in destination path.");
                     return crc32CheckSum;
                 }
+                Console.WriteLine($"{filename} failed SFV validation. Will download again.");
             }
 
             return 0;
@@ -110,14 +117,15 @@ namespace gg_downloader.Services
         private void PrintTotalDownloadTime(TimeSpan downloadTime, long? contentLength)
         {
             var filename = Path.GetFileName(_destinationFilePath);
-            var speed = ((contentLength / downloadTime.TotalSeconds) * 8) / (1024 * 1024);
-            Console.WriteLine($"\rDownloaded {filename}. {contentLength} bytes in {downloadTime.TotalSeconds} seconds ({Math.Round(speed.Value, 2)} Mbps).");
+            var speed = (contentLength / downloadTime.TotalSeconds) / (1024 * 1024);
+            var filesize = (double)contentLength / (1024 * 1024);
+            Console.WriteLine($"\rDownloaded {filename}. {Math.Round(filesize, 2)} MiB in {downloadTime.TotalSeconds} seconds ({Math.Round(speed.Value, 2)} MB/s).");
         }
 
         private async Task<uint> MultiThreadDownload(long contentLength)
         {
             var chunks = (contentLength / minChunkSize);
-            if (chunks > _maxThreads) chunks = _maxThreads;
+            if (chunks > _threads) chunks = _threads;
 
             if (chunks < 2) return await SingleThreadDownload(contentLength);
 
@@ -149,16 +157,38 @@ namespace gg_downloader.Services
             //await mergeFiles(downloadTasks.Select(x => x.FilePath).ToArray());
 
             //Merge CRCs
-            // uint compositeCheckSum = result[0];
-            // for (int i = 1; i < chunks; i++)
-            // {
-            //     compositeCheckSum = compositeCheckSum ^ result[i];
-            // }
+            uint compositeCheckSum = mergeCRCs(downloadTasks);
 
             //return complete checksum for all parts 
             var checkSumFromFile = await Crc32FromFile();
 
             return checkSumFromFile;
+        }
+
+        private uint mergeCRCs(List<HttpClientDownloadWithProgress> results)
+        {
+            var resultsArray = results.ToArray();
+            long contentLength = resultsArray[resultsArray.Length - 1].EndByte.Value;
+
+            uint compositeCheckSum = 0;
+
+            for (int i = 0; i < resultsArray.Length; i++)
+            {
+                var paddedChecksum = resultsArray[i].Checksum;
+                long bytesToAdd = contentLength - resultsArray[i].EndByte.Value;
+
+                while (bytesToAdd > 0)
+                {
+                    long addNow = bytesToAdd > 8192 ? 8192 : bytesToAdd;
+                    bytesToAdd = bytesToAdd - addNow;
+
+                    byte[] endPadding = new byte[bytesToAdd];
+                    paddedChecksum = Crc32Algorithm.Append(paddedChecksum, endPadding, 0, Convert.ToInt32(bytesToAdd));
+                }
+                compositeCheckSum = compositeCheckSum ^ paddedChecksum;
+            }
+            
+            return compositeCheckSum;
         }
 
         private async Task<uint> SingleThreadDownload(long? contentLength)
@@ -174,15 +204,19 @@ namespace gg_downloader.Services
 
         private void UpdateDownloadedBytes(int chunkNumber, long totalBytesRead)
         {
-            if (_downloadedBytes.ContainsKey(chunkNumber))
-                _downloadedBytes[chunkNumber] = totalBytesRead;
-            else
-                _downloadedBytes.Add(chunkNumber, totalBytesRead);
-
             long totalBytes = 0;
-            foreach (var item in _downloadedBytes)
+
+            lock (objectLock)
             {
-                totalBytes += item.Value;
+                if (_downloadedBytes.ContainsKey(chunkNumber))
+                    _downloadedBytes[chunkNumber] = totalBytesRead;
+                else
+                    _downloadedBytes.Add(chunkNumber, totalBytesRead);
+
+                foreach (var item in _downloadedBytes)
+                {
+                    totalBytes += item.Value;
+                }
             }
 
             if (totalBytes > 0) _progressManager.Start();
@@ -214,44 +248,6 @@ namespace gg_downloader.Services
             System.IO.File.Move(inputFilePaths[0], _destinationFilePath);
         }
 
-        private void TriggerProgressChanged(double? dblDownloadSize, double dblBytesRead)
-        {
-            if (ProgressChanged == null)
-                return;
-
-            double? progressPercentage = null;
-
-            if (dblDownloadSize.HasValue)
-                progressPercentage = Math.Round((double)dblBytesRead / dblDownloadSize.Value * 100, 2);
-
-            long gb = 1024 * 1024 * 870;
-            long mb = 1024 * 870;
-            long kb = 870;
-            var unit = "bytes";
-
-            if (dblBytesRead > gb)
-            {
-                dblBytesRead = dblBytesRead / gb;
-                dblDownloadSize = dblDownloadSize / gb;
-                unit = "GiB";
-            }
-            else if (dblBytesRead > mb)
-            {
-                dblBytesRead = dblBytesRead / mb;
-                dblDownloadSize = dblDownloadSize / mb;
-                unit = "MiB";
-            }
-            else if (dblBytesRead > kb)
-            {
-                dblBytesRead = dblBytesRead / kb;
-                dblDownloadSize = dblDownloadSize / kb;
-                unit = "Kib";
-            }
-
-            ProgressChanged(Math.Round(dblDownloadSize.Value, 2), Math.Round(dblBytesRead, 2), progressPercentage, unit);
-            Thread.Sleep(50);
-        }
-
         private async Task<RangeHeaders> getFileSize()
         {
             var client = CleanHttpClient;
@@ -272,13 +268,15 @@ namespace gg_downloader.Services
         private async Task<uint> Crc32FromFile()
         {
             var totalBytesRead = 0L;
-            var readCount = 0L;
             var buffer = new byte[8192];
             var isMoreToRead = true;
             uint? checksum = null;
 
+            if (!File.Exists(_destinationFilePath)) return 0;
+
             using (var fileStream = new FileStream(_destinationFilePath, FileMode.Open, FileAccess.Read, FileShare.None, 8192, true))
             {
+                Console.Write("\n");
                 do
                 {
                     var bytesRead = await fileStream.ReadAsync(buffer, 0, buffer.Length);
@@ -295,10 +293,15 @@ namespace gg_downloader.Services
                     }
 
                     totalBytesRead += bytesRead;
-                    readCount += 1;
+
+                    var percent = Math.Round((double)totalBytesRead / fileStream.Length * 100, 0).ToString().PadLeft(3, ' ');
+
+                    Console.Write($"\rCalculating CRC32 {percent}% ...");
                 }
                 while (isMoreToRead);
             }
+
+            Console.WriteLine("complete.");
 
             return checksum.Value;
         }
