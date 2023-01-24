@@ -50,7 +50,7 @@ namespace gg_downloader.Services
                                  {
                                      if (delegateResult.Exception.GetType() != typeof(TimeoutRejectedException))
                                      {
-                                         Console.Out.WriteLine($" - Error: {delegateResult?.Exception?.Message ?? "No exception"}, retrying: {retryCount}/10");
+                                        Console.Out.WriteLine($" - Error: {delegateResult?.Exception?.Message ?? "No exception"}, retrying: {retryCount}/10");
                                      }
                                      else
                                      {
@@ -102,6 +102,7 @@ namespace gg_downloader.Services
             var fileWritePosition = rangeHeaderValue?.From ?? 0;
             var buffer = new byte[bufferSize];
             var isMoreToRead = true;
+            long readCount = 0;
 
             using (var fileStream = new FileStream(filePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.ReadWrite, bufferSize, true))
             //using (var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
@@ -122,12 +123,15 @@ namespace gg_downloader.Services
                             if (bytesRead == 0)
                             {
                                 isMoreToRead = false;
+                                TriggerProgressChanged(_totalBytesRead);
                             }
 
                             await fileStream.WriteAsync(buffer, 0, bytesRead);
 
                             _totalBytesRead += bytesRead;
-                            TriggerProgressChanged(_totalBytesRead);
+                            readCount++;
+                            if (readCount % 100 == 0)
+                                TriggerProgressChanged(_totalBytesRead);
 
                         }, cts);
                     }

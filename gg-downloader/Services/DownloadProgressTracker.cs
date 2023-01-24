@@ -69,15 +69,9 @@ namespace gg_downloader.Services
 
         private void TriggerProgressChanged()
         {
-            // //Fix to avoid negative download speeds
-            // if (_totalBytesRead.Count > 0 && CurrentBytesRead < _totalBytesRead[_totalBytesRead.Count - 1])
-            //     _totalBytesRead.Clear();
 
             _totalBytesRead.Add(CurrentBytesRead);
             if (_totalBytesRead.Count > _maxDataPoints) _totalBytesRead.RemoveAt(0);
-
-            // if (ProgressChanged == null)
-            //     return;
 
             double? dblDownloadSize = TotalDownloadSize;
             double dblBytesRead = CurrentBytesRead;
@@ -86,7 +80,7 @@ namespace gg_downloader.Services
 
             //Calculate percentage
             if (dblDownloadSize.HasValue)
-                progressPercentage = Math.Round((double)dblBytesRead / dblDownloadSize.Value * 100, 2);
+                progressPercentage = (double)dblBytesRead / dblDownloadSize.Value;
 
             //Calculate Speed
             currentSpeed = calculateCurrentSpeed();
@@ -126,8 +120,8 @@ namespace gg_downloader.Services
 
         private void ProgressChanged(double? totalFileSize, double totalBytesDownloaded, double? progressPercentage, string unit, string speed)
         {
-            var text = $"\r{progressPercentage}% ({totalBytesDownloaded}/{totalFileSize} {unit}) {speed}";
-            UpdateText(text);
+            var text = $"\r{(progressPercentage.Value * 100).ToString("F2")}% ({totalBytesDownloaded}/{totalFileSize} {unit}) {speed}      ";
+            Console.Write(text);
         }
 
         private void UpdateText(string text)

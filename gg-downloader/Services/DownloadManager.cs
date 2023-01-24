@@ -21,7 +21,7 @@ namespace gg_downloader.Services
         private readonly string _destinationFilePath;
         private readonly string _username;
         private readonly string _password;
-        private const long minChunkSize = 1 * 1024 * 1024;
+        private const long minChunkSize = 100 * 1024 * 1024;
         private const int _maxThreads = 4;
         private readonly int _threads;
         private readonly DownloadProgressTracker _progressManager;
@@ -150,7 +150,6 @@ namespace gg_downloader.Services
                 if (i == chunks - 1) endByte = contentLength; //Sets the last byte of last chunk
 
                 var task = new HttpClientDownloadWithProgress(_downloadUrl, _destinationFilePath, CleanHttpClient, startByte, endByte, contentLength, i);
-                _downloadedBytes.Add(i, 0);
                 task.DownloadedBytesChanged += UpdateDownloadedBytes;
 
                 downloadTasks.Add(task);
