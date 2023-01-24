@@ -8,6 +8,9 @@ using System.Threading.Tasks;
 using Force.Crc32;
 using gg_downloader.Models;
 using System.Linq;
+using Polly;
+using Polly.Retry;
+using System.Threading;
 
 namespace gg_downloader.Services
 {
@@ -28,6 +31,7 @@ namespace gg_downloader.Services
         private DateTime _endTime;
         private readonly Dictionary<string, string> _sfvDictionary;
         private readonly object objectLock = new object();
+        private readonly AsyncRetryPolicy<HttpResponseMessage> _retryPolicy;
 
         public DownloadManager(string downloadUrl, string destinationFilePath, string username, string password, Dictionary<string, string> sfvDictionary, int threads)
         {
@@ -43,6 +47,14 @@ namespace gg_downloader.Services
 
             _httpClient = new HttpClient();
             _httpClient.Timeout = TimeSpan.FromSeconds(10);
+
+            _retryPolicy = Policy.HandleResult<HttpResponseMessage>(res => !res.IsSuccessStatusCode)
+                     .Or<Exception>()
+                     .RetryAsync(10, onRetry: (delegateResult, retryCount) =>
+                     {
+                         Console.Out.WriteLine($" - Error: {delegateResult?.Exception?.Message ?? "No exception"}, retrying: {retryCount}/10");
+                         Thread.Sleep(500);
+                     });
         }
 
         private HttpClient CleanHttpClient
@@ -136,8 +148,9 @@ namespace gg_downloader.Services
                 var startByte = chunkSize * i;
                 var endByte = (chunkSize * (i + 1)) - 1;
                 if (i == chunks - 1) endByte = contentLength; //Sets the last byte of last chunk
-                
+
                 var task = new HttpClientDownloadWithProgress(_downloadUrl, _destinationFilePath, CleanHttpClient, startByte, endByte, contentLength, i);
+                _downloadedBytes.Add(i, 0);
                 task.DownloadedBytesChanged += UpdateDownloadedBytes;
 
                 downloadTasks.Add(task);
@@ -160,19 +173,9 @@ namespace gg_downloader.Services
         private void UpdateDownloadedBytes(int chunkNumber, long totalBytesRead)
         {
             long totalBytes = 0;
-
-            lock (objectLock)
-            {
-                if (_downloadedBytes.ContainsKey(chunkNumber))
-                    _downloadedBytes[chunkNumber] = totalBytesRead;
-                else
-                    _downloadedBytes.Add(chunkNumber, totalBytesRead);
-
-                foreach (var item in _downloadedBytes)
-                {
-                    totalBytes += item.Value;
-                }
-            }
+            
+            _downloadedBytes[chunkNumber] = totalBytesRead;
+            totalBytes = _downloadedBytes.Sum(x => x.Value);
 
             if (totalBytes > 0) _progressManager.Start();
 
@@ -185,7 +188,9 @@ namespace gg_downloader.Services
 
             var message = new HttpRequestMessage(HttpMethod.Head, _downloadUrl);
 
-            var response = await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead);
+            var response = await _retryPolicy.ExecuteAsync(async () =>
+                        await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead)
+            );
 
             var headers = new RangeHeaders()
             {
