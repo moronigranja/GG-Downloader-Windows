@@ -46,13 +46,14 @@ namespace gg_downloader.Services
             _progressManager = new DownloadProgressTracker();
 
             _httpClient = new HttpClient();
-            _httpClient.Timeout = TimeSpan.FromSeconds(10);
+            _httpClient.Timeout = TimeSpan.FromMinutes(5);
+
 
             _retryPolicy = Policy.HandleResult<HttpResponseMessage>(res => !res.IsSuccessStatusCode)
                      .Or<Exception>()
                      .RetryAsync(10, onRetry: (delegateResult, retryCount) =>
                      {
-                         Console.Out.WriteLine($" - Error: {delegateResult?.Exception?.Message ?? "No exception"}, retrying: {retryCount}/10");
+                         Console.Out.WriteLine($"Error: {delegateResult?.Exception?.Message ?? "No exception"}, retrying: {retryCount}/10");
                          Thread.Sleep(500);
                      });
         }
@@ -172,7 +173,7 @@ namespace gg_downloader.Services
         private void UpdateDownloadedBytes(int chunkNumber, long totalBytesRead)
         {
             long totalBytes = 0;
-            
+
             _downloadedBytes[chunkNumber] = totalBytesRead;
             totalBytes = _downloadedBytes.Sum(x => x.Value);
 
