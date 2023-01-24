@@ -63,6 +63,8 @@ In addition to the options above, the download command has several additional op
 
 `--game` Download the game files [default: True]
 
+`-t` or `--threads <threads>` how many threads to use for downloading (max: 4) [default: 4]
+
 **Examples**
 
 Authenticate against the CDN and set the username and password for the first time: `./gg-downloader.exe auth`
