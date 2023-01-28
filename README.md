@@ -1,4 +1,4 @@
-﻿# GG-Downloader-Windows
+# GG-Downloader-Windows
 
 Download files from GOG Games CDN.
 
@@ -8,11 +8,12 @@ To access, a "cdn.gog-games.com" username/password is required.
 That is coming next. Be patient. :)
 
 ## TL:DR I'm dumb
-1. Download the latest release (the .zip file found [here](https://github.com/GOG-Games-com/GG-Downloader-Windows/releases)) and extract
-2. Open a Command Prompt or PowerShell terminal in the location of `gg-downloader.exe`
-3. Authenticate: `./gg-downloader.exe auth`
-3. Download: `./gg-downloader.exe download https://gog-games.com/game/arcade_paradise` (replace url for another game) or `./gg-downloader download arcade_paradise` (replace slug for another game)
-4. Entered wrong creds for auth? `./gg-downloader.exe reset`
+1. Download the latest release (the .tar.gz archive found [here](https://github.com/GOG-Games-com/GG-Downloader-Windows/releases)) 
+2. Extract the `gg-downloader-windows.tar.gz` file. If you have Windows 10 or above, you can run the following command in Command Prompt or PowerShell terminal in the location where you downloaded the file to extract: `tar xf gg-downloader-windows.tar.gz` You can also use [7ip](https://www.7-zip.org/download.html) to extract the `.tar.gz` archive then followed by extraction of the `.tar` archive.
+3. Open a Command Prompt or PowerShell terminal in the location of `gg-downloader.exe`
+4. Authenticate: `./gg-downloader.exe auth`
+5. Download: `./gg-downloader.exe download https://gog-games.com/game/arcade_paradise` (replace url for another game) or `./gg-downloader download arcade_paradise` (replace slug for another game)
+6. Entered wrong creds for auth? `./gg-downloader.exe reset`
 
 ## Usage
 `./gg-downloader.exe [command] [options]`
