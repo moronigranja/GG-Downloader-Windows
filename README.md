@@ -1,5 +1,4 @@
 # GG-Downloader-Windows
-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
 Download files from GOG Games CDN.
 
 To access, a "cdn.gog-games.com" username/password is required.
