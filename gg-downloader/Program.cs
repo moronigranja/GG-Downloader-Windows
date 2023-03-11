@@ -221,7 +221,7 @@ namespace gg_downloader
                 }
                 Console.WriteLine($"\r{file.FileName} downloaded.");
 
-                if (noVerify) continue;
+                if (noVerify || file.Type == FileToDownloadInfo.FileType.Patch) continue;
 
                 // check the file against the sfv dictionary.
                 if (crc32CheckSum.ToString("X8").ToLower() != sfvDictionary[file.FileName])
