@@ -1,5 +1,5 @@
 # GG-Downloader-Windows
-
+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
 Download files from GOG Games CDN.
 
 To access, a "cdn.gog-games.com" username/password is required.
@@ -98,3 +98,11 @@ Compile with a .NET SDK (supports .NET Framework 4.8 or .NET 7.0).
  2. To compile with the .NET 7.0 SDK, from the root source folder, execute 
  `dotnet build -f:net7.0-windows -c:Release`
  3. Will also compile for .NET 6.0 via adding the `net6.0` moniker to the `<TargetFrameworks>` property in `gg-downloader.csproj`. No other changes should 
+
+# How to push a new release with Github Action (for repo maintainers only)
+- Add all changes to main branch
+- Update `release-notes.md` with the change log
+- Clone the repo with: `git clone`
+- Tag a new version: `git tag v1.0.x`
+- Push the tag: `git push --tags`
+- Actions will build a new release
