@@ -227,7 +227,7 @@ namespace gg_downloader
                     crc32CheckSum = await manager.StartDownload();
                 }
 
-                if (noVerify) continue;
+                if (noVerify || file.Type == FileToDownloadInfo.FileType.Patch) continue;
 
                 // check the file against the sfv dictionary.
                 if (crc32CheckSum.ToString("X8").ToLower() != sfvDictionary[file.FileName])
