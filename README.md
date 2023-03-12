@@ -1,5 +1,4 @@
-﻿# GG-Downloader-Windows
-
+# GG-Downloader-Windows
 Download files from GOG Games CDN.
 
 To access, a "cdn.gog-games.com" username/password is required.
@@ -8,11 +7,12 @@ To access, a "cdn.gog-games.com" username/password is required.
 That is coming next. Be patient. :)
 
 ## TL:DR I'm dumb
-1. Download the latest release (the .zip file found [here](https://github.com/GOG-Games-com/GG-Downloader-Windows/releases)) and extract
-2. Open a Command Prompt or PowerShell terminal in the location of `gg-downloader.exe`
-3. Authenticate: `./gg-downloader.exe auth`
-3. Download: `./gg-downloader.exe download https://gog-games.com/game/arcade_paradise` (replace url for another game) or `./gg-downloader download arcade_paradise` (replace slug for another game)
-4. Entered wrong creds for auth? `./gg-downloader.exe reset`
+1. Download the latest release (the .tar.gz archive found [here](https://github.com/GOG-Games-com/GG-Downloader-Windows/releases)) 
+2. Extract the `gg-downloader-windows.tar.gz` file. If you have Windows 10 or above, you can run the following command in Command Prompt or PowerShell terminal in the location where you downloaded the file to extract: `tar xf gg-downloader-windows.tar.gz` You can also use [7zip](https://www.7-zip.org/download.html) to extract the `.tar.gz` archive then followed by extraction of the `.tar` archive
+3. Open a Command Prompt or PowerShell terminal in the location of `gg-downloader.exe`
+4. Authenticate: `./gg-downloader.exe auth`
+5. Download: `./gg-downloader.exe download https://gog-games.com/game/arcade_paradise` (replace url for another game) or `./gg-downloader download arcade_paradise` (replace slug for another game)
+6. Entered wrong creds for auth? `./gg-downloader.exe reset`
 
 ## Usage
 `./gg-downloader.exe [command] [options]`
@@ -63,6 +63,8 @@ In addition to the options above, the download command has several additional op
 
 `--game` Download the game files [default: True]
 
+`-t` or `--threads <threads>` how many threads to use for downloading (max: 4) [default: 4]
+
 **Examples**
 
 Authenticate against the CDN and set the username and password for the first time: `./gg-downloader.exe auth`
@@ -95,3 +97,11 @@ Compile with a .NET SDK (supports .NET Framework 4.8 or .NET 7.0).
  2. To compile with the .NET 7.0 SDK, from the root source folder, execute 
  `dotnet build -f:net7.0-windows -c:Release`
  3. Will also compile for .NET 6.0 via adding the `net6.0` moniker to the `<TargetFrameworks>` property in `gg-downloader.csproj`. No other changes should 
+
+# How to push a new release with Github Action (for repo maintainers only)
+- Add all changes to main branch
+- Update `release-notes.md` with the change log
+- Clone the repo with: `git clone`
+- Tag a new version: `git tag v1.0.x`
+- Push the tag: `git push --tags`
+- Actions will build a new release
